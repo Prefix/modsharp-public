@@ -210,6 +210,8 @@ target_compile_features(modsharp PUBLIC
 if(CMAKE_SYSTEM_NAME MATCHES "Linux") # linux
 	target_compile_options(modsharp PUBLIC
 		-Wall
+		-Wformat
+		-Werror=format-insufficient-args
 		-Wno-uninitialized
 		-Wno-switch
 		-Wno-unused

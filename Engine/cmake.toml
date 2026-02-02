@@ -34,6 +34,10 @@ gcc.compile-options = [
 
 linux.compile-options = [
     "-Wall",
+
+    "-Wformat",
+    "-Werror=format-insufficient-args",
+
     "-Wno-uninitialized",
     "-Wno-switch",
     "-Wno-unused",
