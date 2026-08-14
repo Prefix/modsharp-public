@@ -18,6 +18,9 @@
  */
 
 #include "steamworks.h"
+
+#include <fstream>
+#include <json.hpp>
 #include "bridge/forwards/forward.h"
 #include "global.h"
 #include "logging.h"
@@ -65,18 +68,88 @@ ISteamApiProxy*                   g_pSteamApiProxy      = &g_SteamApiProxy;
 uint64_t                          g_unDualAddonId       = 0;
 bool                              g_bDualAddonAvailable = false;
 
-void InitApiContext()
+// Resolves the dual-addon id once, from the command line first and configs/core.json second.
+//
+// The command line still wins, so nothing changes for an existing server. The file exists because
+// many hosts do not expose startup arguments to the person renting the server — a control panel with
+// a file manager and a restart button is common — and -dual_addon is otherwise the one setting they
+// cannot reach.
+//
+// It cannot be a convar: FixFileSystem() needs this during filesystem setup, long before any cfg
+// executes. core.json is read directly here for the same reason — the managed configuration is not
+// available until CoreCLR starts, which is later still.
+//
+// The result is cached, so the file is read at most once per process.
+uint64_t ResolveConfiguredDualAddonId()
 {
+    static uint64_t s_resolved = 0;
+    static bool     s_done     = false;
+
+    if (s_done)
+    {
+        return s_resolved;
+    }
+
+    s_done = true;
+
     if (CommandLine()->HasParam("-dual_addon"))
     {
         if (const auto pszValue = CommandLine()->ParamValue("-dual_addon", nullptr))
         {
             if (uint64_t ugcId; (ugcId = strtoull(pszValue, nullptr, 10)) > 0)
             {
-                g_unDualAddonId = ugcId;
-                LOG("Load dual addon = %llu", ugcId);
+                s_resolved = ugcId;
+
+                return s_resolved;
             }
         }
+    }
+
+    // configs/core.json, the same file the managed side reads. Parsed here rather than passed down
+    // from Sharp.Core because FixFileSystem() needs the value before CoreCLR is up.
+    try
+    {
+        std::ifstream stream("../../sharp/configs/core.json");
+
+        if (stream.is_open())
+        {
+            const auto json = nlohmann::json::parse(stream, nullptr, /*allow_exception*/ true, /*ignore_comments*/ true);
+
+            if (const auto it = json.find("DualAddonId"); it != json.end())
+            {
+                // Accept a number or a string — a 64-bit id is long enough that people quote it.
+                if (it->is_number_unsigned())
+                {
+                    s_resolved = it->get<uint64_t>();
+                }
+                else if (it->is_string())
+                {
+                    s_resolved = strtoull(it->get<std::string>().c_str(), nullptr, 10);
+                }
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        // A malformed core.json is the managed side's problem to report; here it simply means the
+        // value is unset, which is the existing behaviour when the flag is absent.
+        LOG("Could not read DualAddonId from core.json: %s", e.what());
+    }
+
+    if (s_resolved > 0)
+    {
+        LOG("Dual addon id %llu read from core.json", s_resolved);
+    }
+
+    return s_resolved;
+}
+
+void InitApiContext()
+{
+    if (const auto ugcId = ResolveConfiguredDualAddonId(); ugcId > 0)
+    {
+        g_unDualAddonId = ugcId;
+        LOG("Load dual addon = %llu", ugcId);
     }
 
     g_SteamGameServerAPIContext.Init();
