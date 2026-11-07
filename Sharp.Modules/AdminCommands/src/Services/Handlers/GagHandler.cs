@@ -91,7 +91,9 @@ internal class GagHandler : IAdminOperationHandler, IAdminOperationHookRegistrar
         bool                                             isCommand,
         string                                           commandName,
         string                                           message)
-        => IsGagged(client.SteamId) && !isCommand ? ECommandAction.Stopped : ECommandAction.Skipped;
+        // Block the chat line even when it starts with a command: "!mute hello" would otherwise be broadcast in full.
+        // The command itself still runs, ClientManager queues it before the listeners are asked.
+        => IsGagged(client.SteamId) ? ECommandAction.Stopped : ECommandAction.Skipped;
 
     private bool IsGagged(SteamID steamId)
     {
