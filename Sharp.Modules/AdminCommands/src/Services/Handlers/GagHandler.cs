@@ -95,7 +95,7 @@ internal class GagHandler : IAdminOperationHandler, IAdminOperationHookRegistrar
         // The command itself still runs, ClientManager queues it before the listeners are asked.
         => IsGagged(client.SteamId) ? ECommandAction.Stopped : ECommandAction.Skipped;
 
-    private bool IsGagged(SteamID steamId)
+    internal bool IsGagged(SteamID steamId)
     {
         if (!_gags.TryGetValue(steamId, out var entry))
         {

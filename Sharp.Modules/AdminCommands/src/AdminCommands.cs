@@ -156,6 +156,11 @@ public class AdminCommands : IModSharpModule
         _shared.GetSharpModuleManager()
                .RegisterSharpModuleInterface(this, IAdminService.Identity, adminServices);
 
+        // Lets chat relays (team chat, chat spy) drop a gagged player's text without referencing this assembly.
+        var gags = _serviceProvider.GetRequiredService<GagHandler>();
+        _shared.GetSharpModuleManager()
+               .RegisterDynamicNative(this, "AdminCommands.IsGagged", (Func<ulong, bool>) (steamId => gags.IsGagged(steamId)));
+
         RefreshExternalModules();
     }
 
